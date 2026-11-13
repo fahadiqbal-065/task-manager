@@ -1,0 +1,29 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+
+  backend:
+    image: ${DOCKERHUB_USER}/taskmanager-backend:latest
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      - MONGO_URL=mongodb://mongo:27017/taskdb
+    depends_on:
+      - mongo
+    ports:
+      - "5000:5000"
+
+  frontend:
+    image: ${DOCKERHUB_USER}/taskmanager-frontend:latest
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+
+volumes:
+  mongo-data:

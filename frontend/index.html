@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Task Manager</title>
+  <style>
+    :root {
+      --bg: #f3f5f7;
+      --card: #ffffff;
+      --text: #1d2733;
+      --muted: #6b7785;
+      --line: #dde2e8;
+      --accent: #1f6feb;
+      --danger: #c93c37;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      padding: 48px 16px;
+    }
+    main { width: 100%; max-width: 560px; }
+    h1 { font-size: 28px; margin: 0 0 4px; }
+    .sub { color: var(--muted); margin: 0 0 24px; }
+    form { display: flex; gap: 8px; margin-bottom: 20px; }
+    input[type="text"] {
+      flex: 1; padding: 12px 14px; font-size: 16px;
+      border: 1px solid var(--line); border-radius: 8px; background: var(--card);
+    }
+    button { font: inherit; cursor: pointer; border-radius: 8px; }
+    button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .add { padding: 12px 18px; border: 0; background: var(--accent); color: #fff; font-weight: 600; }
+    ul { list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+    li { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+    li:last-child { border-bottom: 0; }
+    li span { flex: 1; word-break: break-word; }
+    li.done span { text-decoration: line-through; color: var(--muted); }
+    input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; }
+    .del { border: 1px solid var(--line); background: transparent; color: var(--danger); padding: 6px 12px; }
+    .empty { padding: 28px 16px; text-align: center; color: var(--muted); }
+    .error { color: var(--danger); margin: 0 0 12px; min-height: 1em; }
+    .count { color: var(--muted); font-size: 14px; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Task Manager</h1>
+    <p class="sub">Add tasks, tick them off, delete them.</p>
+    <p class="error" id="error"></p>
+    <form id="form">
+      <input type="text" id="title" placeholder="What needs doing?" autocomplete="off" aria-label="New task">
+      <button class="add" type="submit">Add task</button>
+    </form>
+    <ul id="list"></ul>
+    <p class="count" id="count"></p>
+  </main>
+
+  <script>
+    const list = document.getElementById('list');
+    const form = document.getElementById('form');
+    const titleInput = document.getElementById('title');
+    const errorBox = document.getElementById('error');
+    const countBox = document.getElementById('count');
+
+    async function api(path, options) {
+      const res = await fetch('/api' + path, {
+        headers: { 'Content-Type': 'application/json' },
+        ...options,
+      });
+      if (!res.ok) throw new Error('Request failed (' + res.status + ')');
+      return res.json();
+    }
+
+    function render(tasks) {
+      list.innerHTML = '';
+      if (tasks.length === 0) {
+        list.innerHTML = '<li class="empty">No tasks yet. Add your first one above.</li>';
+        countBox.textContent = '';
+        return;
+      }
+      tasks.forEach((t) => {
+        const li = document.createElement('li');
+        if (t.done) li.className = 'done';
+
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.checked = t.done;
+        box.setAttribute('aria-label', 'Mark "' + t.title + '" as done');
+        box.onchange = () => run(() => api('/tasks/' + t._id, { method: 'PUT', body: JSON.stringify({ done: box.checked }) }));
+
+        const text = document.createElement('span');
+        text.textContent = t.title;
+
+        const del = document.createElement('button');
+        del.className = 'del';
+        del.textContent = 'Delete';
+        del.onclick = () => run(() => api('/tasks/' + t._id, { method: 'DELETE' }));
+
+        li.append(box, text, del);
+        list.appendChild(li);
+      });
+      const left = tasks.filter((t) => !t.done).length;
+      countBox.textContent = left + ' of ' + tasks.length + ' tasks left';
+    }
+
+    async function load() {
+      try {
+        errorBox.textContent = '';
+        render(await api('/tasks'));
+      } catch (e) {
+        errorBox.textContent = 'Could not load tasks. The backend may still be starting; refresh in a few seconds.';
+      }
+    }
+
+    async function run(action) {
+      try { await action(); await load(); }
+      catch (e) { errorBox.textContent = e.message; }
+    }
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const title = titleInput.value.trim();
+      if (!title) return;
+      titleInput.value = '';
+      run(() => api('/tasks', { method: 'POST', body: JSON.stringify({ title }) }));
+    });
+
+    load();
+  </script>
+</body>
+</html>
